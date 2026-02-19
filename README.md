@@ -105,7 +105,7 @@ Stores client master data and revenue attributes.
 * Track contract types
 * Support revenue forecasting
 
-```
+```SQL
 CREATE TABLE IF NOT EXISTS `customers` (
 	`customer_id`				VARCHAR(16),            -- Unique identifier for each customer
 	`customer_name`				VARCHAR(32) NOT NULL,   -- Customer display name (free text)
@@ -133,7 +133,7 @@ Represents fleet assets and operational status.
 * Maintenance scheduling
 * Capacity planning
 
-```
+```SQL
 CREATE TABLE IF NOT EXISTS `trucks` (
 	`truck_id`				VARCHAR(16),                    -- Unique identifier for each truck unit
 	`unit_number`			SMALLINT UNIQUE NOT NULL,       -- Internal fleet unit number assigned to the truck
@@ -163,7 +163,7 @@ Stores trailer specifications and availability.
 * Equipment allocation
 * Freight compatibility matching
 
-```
+```SQL
 CREATE TABLE IF NOT EXISTS `trailers` (
 	`trailer_id`		VARCHAR(16),                    -- Unique identifier for each trailer
 	`trailer_number`	SMALLINT NOT NULL,
@@ -192,7 +192,7 @@ Captures workforce data including employment and licensing.
 * Compliance tracking
 * Safety performance evaluation
 
-```
+```SQL
 CREATE TABLE IF NOT EXISTS `drivers` (
 	`driver_id`			VARCHAR(16),                    -- Unique identifier for each driver
 	`first_name`		VARCHAR(32) NOT NULL,	        -- Driver's legal first name
@@ -224,7 +224,7 @@ Key attributes include:
 * Weight and cargo type
 * Revenue and surcharges
 
-```
+```SQL
 CREATE TABLE IF NOT EXISTS `loads` (
 	`load_id`				VARCHAR(16),        -- Unique identifier for each shipment load
 	`customer_id`			VARCHAR(16),        -- Reference to the customer who booked the load
@@ -260,7 +260,7 @@ Supports:
 * Pricing models
 * Transit time predictions
 
-```
+```SQL
 CREATE TABLE IF NOT EXISTS `routes` (
 	`route_id`					VARCHAR(16),            -- Unique identifier for each transportation route
 	`origin_city`				VARCHAR(32) NOT NULL,   -- Origin city where the route begins
@@ -295,7 +295,7 @@ Tracks performance metrics such as:
 * Driving hours
 * Idle time
 
-```
+```SQL
 CREATE TABLE IF NOT EXISTS `trips` (
 	`load_id`				VARCHAR(16),	-- Unique identifier for each trip record
 	`driver_id`				VARCHAR(16),	-- Reference to the associated shipment load
