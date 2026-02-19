@@ -1,3 +1,44 @@
+/*
+============================================================
+Driver Monthly Performance Summary
+============================================================
+
+Description:
+This query calculates monthly operational and performance 
+metrics for each driver based on completed delivery trips.
+
+Purpose:
+Used for driver performance analysis, productivity tracking,
+and operational efficiency monitoring.
+
+Key Metrics Computed:
+• Total trips completed per month
+• Total miles driven
+• Total revenue generated
+• Average fuel efficiency (MPG)
+• Total fuel consumption
+• On-time delivery percentage
+• Average idle time per trip
+
+Data Sources:
+- trips → core trip operational data
+- loads → revenue information
+- delivery_events → used to filter only completed deliveries
+
+Important Notes:
+- Only trips with a "Delivery" event are included
+- Results are grouped by driver and month
+- On-time delivery % is calculated using on_time_flag
+- Date is formatted as YYYY-MM for monthly aggregation
+
+Use Cases:
+- Driver performance dashboards
+- Productivity benchmarking
+- Incentive/bonus calculations
+- Operational efficiency analysis
+
+============================================================
+*/
 SELECT
     trips.driver_id,
     DATE_FORMAT(trips.dispatch_date, '%Y-%m') AS month,
@@ -19,6 +60,54 @@ GROUP BY
 ORDER BY driver_id
 LIMIT 70;
 
+
+
+/*
+============================================================
+Truck Monthly Performance & Maintenance Summary
+============================================================
+
+Description:
+This query generates monthly operational and maintenance
+performance metrics for each truck in the fleet.
+
+Purpose:
+Supports fleet utilization monitoring, cost analysis, and
+maintenance planning.
+
+Key Metrics Computed:
+• Total trips completed
+• Total miles driven
+• Total revenue generated
+• Average fuel efficiency (MPG)
+• Number of maintenance events
+• Total maintenance cost
+• Total downtime hours
+• Truck utilization rate
+
+Data Sources:
+- trips → operational trip data
+- loads → revenue per trip
+- maintenance_records → aggregated monthly maintenance info
+
+Important Notes:
+- Maintenance data is pre-aggregated in a subquery by truck and month
+- LEFT JOIN ensures trucks without maintenance still appear
+- Utilization rate represents proportion of time the truck
+  was actively used relative to total available hours
+
+Formula:
+Utilization Rate =
+Total Driving Hours / (Total Days in Month × 24)
+
+Use Cases:
+- Fleet performance dashboards
+- Maintenance cost tracking
+- Asset utilization optimization
+- Preventive maintenance planning
+
+============================================================
+*/
 SELECT
     trips.truck_id,
     DATE_FORMAT(trips.dispatch_date, '%Y-%m') AS month,
@@ -51,3 +140,4 @@ GROUP BY
     DATE_FORMAT(trips.dispatch_date, '%Y-%m')
 ORDER BY trips.truck_id
 LIMIT 20;
+
