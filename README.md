@@ -38,9 +38,13 @@ Modern logistics operations generate complex interconnected data across many dom
 This database centralizes all operational data to enable:
 
 ✅ End-to-end trip visibility
+
 ✅ Cost and profitability analysis
+
 ✅ Operational performance tracking
+
 ✅ Safety & compliance monitoring
+
 ✅ Strategic decision support
 
 ---
