@@ -70,6 +70,8 @@ mysql -u root -p --local-infile=1 logistics < load_data.sql
 
 ## Schema Design
 
+![ER Diagram](diagram.png)
+
 The schema follows a hub-and-spoke architecture centered on the `trips` table, which links every driver, truck, trailer, and load into a single operational record.
 
 ```
