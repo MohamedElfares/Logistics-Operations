@@ -1,7 +1,7 @@
--- Drop the schema for test porpeses.
+-- Drop the schema for test proposes.
 DROP SCHEMA IF EXISTS `logistics`;
 
--- Create new schema calle	d logistics.
+-- Create new schema called logistics.
 CREATE SCHEMA IF NOT EXISTS `logistics`;
 USE `logistics`;
 
@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS `delivery_events` (
 	`scheduled_datetime`	DATETIME(6),	-- Planned date and time for the event
 	`actual_datetime`		DATETIME(6),	-- Actual date and time when the event occurred
 	`detention_minutes`		SMALLINT,		-- Total detention time recorded in minutes
-	`on_time_flag`			TINYINT(1),   	-- Indicator showing whether the event occurred on time
+	`on_time_flag`			VARCHAR(5),   	-- Indicator showing whether the event occurred on time
 	`location_city`			VARCHAR(32),	-- City where the event took place
 	`location_state`		CHAR(2),		-- Two-letter state code of the event location
 	
@@ -199,12 +199,12 @@ CREATE TABLE IF NOT EXISTS `safety_incidents` (
 	`incident_type`			VARCHAR(64),		-- Classification of the incident (e.g., collision, violation)
 	`location_city`			VARCHAR(32),		-- City where the incident occurred
 	`location_state`		CHAR(2),			-- Two-letter state code of the incident location
-	`at_fault_flag`			TINYINT(1),			-- Indicator showing whether the driver was at fault
-	`injury_flag`			TINYINT(1),			-- Indicator showing whether injuries were reported
+	`at_fault_flag`			VARCHAR(5),			-- Indicator showing whether the driver was at fault
+	`injury_flag`			VARCHAR(5),			-- Indicator showing whether injuries were reported
 	`vehicle_damage_cost`	FLOAT,				-- Estimated cost of vehicle damage
 	`cargo_damage_cost`		FLOAT,				-- Estimated cost of cargo damage
 	`claim_amount`			FLOAT,				-- Insurance claim amount related to the incident
-	`preventable_flag`		TINYINT(1),			-- Indicator showing whether the incident was preventable
+	`preventable_flag`		VARCHAR(5),			-- Indicator showing whether the incident was preventable
 	`description`			TEXT,				-- Detailed description of the incident
 	
 	-- Primary key constraint
@@ -1066,3 +1066,4 @@ IGNORE 1 ROWS
 	downtime_hours,
 	service_description
 );
+
