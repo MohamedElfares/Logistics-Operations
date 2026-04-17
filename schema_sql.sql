@@ -558,24 +558,7 @@ BEGIN
 		NEW.incident_type = Capitalize(NEW.incident_type),
 		NEW.location_city = Capitalize(NEW.location_city),
 		NEW.location_state = UPPER(NEW.location_state);
-
-	IF NEW.at_fault_flag LIKE 'TRUE' OR NEW.at_fault_flag = '1' THEN
-		SET NEW.at_fault_flag = 1;
-	ELSE
-		SET NEW.at_fault_flag = 0;
-	END IF;
-
-	IF NEW.injury_flag LIKE 'TRUE' OR NEW.injury_flag = '1' THEN
-		SET NEW.injury_flag = 1;
-	ELSE
-		SET NEW.injury_flag = 0;
-	END IF;
-
-	IF NEW.preventable_flag LIKE 'TRUE' OR NEW.preventable_flag = '1' THEN
-		SET NEW.preventable_flag = 1;
-	ELSE
-		SET NEW.preventable_flag = 0;
-	END IF;
 END //
 
 DELIMITER ;
+
