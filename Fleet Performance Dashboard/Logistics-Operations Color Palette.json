@@ -1,0 +1,103 @@
+{
+  "name": "Logistics Fleet Dashboard Theme",
+  "dataColors": [
+    "#1E3A5F",
+    "#2ECC71",
+    "#E74C3C",
+    "#F39C12",
+    "#2980B9",
+    "#8E44AD"
+  ],
+  "background": "#F5F5F5",
+  "foreground": "#1E3A5F",
+  "tableAccent": "#1E3A5F",
+  "visualStyles": {
+    "*": {
+      "*": {
+        "fontFamily": [{"value": "Segoe UI"}],
+        "fontSize": [{"value": 10}],
+        "color": [{"value": "#1E3A5F"}]
+      }
+    },
+    "card": {
+      "*": {
+        "calloutValue": [{
+          "color": {"solid": {"color": "#1E3A5F"}},
+          "fontSize": 28,
+          "fontFamily": "Segoe UI",
+          "fontBold": true
+        }],
+        "label": [{
+          "color": {"solid": {"color": "#666666"}},
+          "fontSize": 10
+        }]
+      }
+    },
+    "barChart": {
+      "*": {
+        "dataPoint": [{
+          "fill": {"solid": {"color": "#1E3A5F"}}
+        }]
+      }
+    },
+    "lineChart": {
+      "*": {
+        "dataPoint": [{
+          "fill": {"solid": {"color": "#1E3A5F"}}
+        }]
+      }
+    },
+    "gauge": {
+      "*": {
+        "dataPoint": [{
+          "fill": {"solid": {"color": "#2ECC71"}}
+        }]
+      }
+    },
+    "tableEx": {
+      "*": {
+        "header": [{
+          "fontColor": {"solid": {"color": "#FFFFFF"}},
+          "backColor": {"solid": {"color": "#1E3A5F"}},
+          "fontSize": 11,
+          "fontBold": true
+        }],
+        "rows": [{
+          "fontColor": {"solid": {"color": "#1E3A5F"}},
+          "backColor": {"solid": {"color": "#FFFFFF"}},
+          "fontSize": 10
+        }]
+      }
+    },
+    "matrix": {
+      "*": {
+        "header": [{
+          "fontColor": {"solid": {"color": "#FFFFFF"}},
+          "backColor": {"solid": {"color": "#1E3A5F"}},
+          "fontSize": 11,
+          "fontBold": true
+        }]
+      }
+    },
+    "slicer": {
+      "*": {
+        "selection": [{
+          "selectAllCheckboxEnabled": true
+        }],
+        "header": [{
+          "fontColor": {"solid": {"color": "#FFFFFF"}},
+          "backColor": {"solid": {"color": "#1E3A5F"}},
+          "fontSize": 11,
+          "fontBold": true
+        }]
+      }
+    },
+    "scatterChart": {
+      "*": {
+        "dataPoint": [{
+          "fill": {"solid": {"color": "#1E3A5F"}}
+        }]
+      }
+    }
+  }
+}

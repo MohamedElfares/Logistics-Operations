@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fleet Performance Dashboard — Data Model</title>
+<style>
+:root {
+  --bg:           #090E15;
+  --dot-color:    #111B27;
+  --tb-bg:        #0C1520;
+  --tb-border:    #18273A;
+  --card-body:    #0D1826;
+  --text:         #C2D4E2;
+  --text-dim:     #4E6A84;
+  --text-muted:   #2A3F55;
+  --fact-hdr:     #132848;
+  --fact-bdr:     #2980B9;
+  --dim-hdr:      #102E1E;
+  --dim-bdr:      #27AE60;
+  --ext-hdr:      #1E1035;
+  --ext-bdr:      #8E44AD;
+  --date-hdr:     #2E1400;
+  --date-bdr:     #D35400;
+  --rel-act:      #3498DB;
+  --rel-bidir:    #2ECC71;
+  --rel-inact:    #2A4060;
+  --pk:           #E8B830;
+  --fk-act:       #5DADE2;
+  --fk-inact:     #3E5C76;
+  --type-col:     #2E5070;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); }
+
+/* ── Toolbar ── */
+#toolbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 42px;
+  background: var(--tb-bg); border-bottom: 1px solid var(--tb-border);
+  display: flex; align-items: center; padding: 0 14px; gap: 7px; z-index: 300;
+  user-select: none;
+}
+.tb-title { font-size: 12px; font-weight: 600; color: #D8E8F5; flex: 1; letter-spacing: .2px; }
+.tb-title small { color: var(--text-dim); font-weight: 400; margin-left: 8px; font-size: 11px; }
+.tb-sep { width: 1px; height: 16px; background: var(--tb-border); }
+.tb-btn {
+  height: 25px; padding: 0 10px; border-radius: 4px;
+  border: 1px solid var(--tb-border); background: transparent;
+  color: var(--text-dim); font-size: 11px; cursor: pointer; white-space: nowrap;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.tb-btn:hover { background: #18273A; color: var(--text); border-color: #2A3F55; }
+.tb-btn.lit  { background: var(--fact-bdr); color: #fff; border-color: var(--fact-bdr); }
+#zoom-pct { font-size: 11px; color: var(--text-dim); min-width: 36px; text-align: center; }
+
+/* ── Export menu ── */
+.exp-wrap { position: relative; }
+.exp-menu {
+  display: none; position: absolute; top: 31px; right: 0;
+  background: var(--tb-bg); border: 1px solid var(--tb-border);
+  border-radius: 6px; padding: 4px; min-width: 168px; z-index: 500;
+  box-shadow: 0 10px 28px rgba(0,0,0,.55);
+}
+.exp-menu.open { display: block; }
+.exp-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 9px; border-radius: 4px; font-size: 11px; color: var(--text);
+  cursor: pointer; gap: 12px; white-space: nowrap;
+}
+.exp-item:hover { background: #18273A; }
+.exp-dim { font-size: 9.5px; color: var(--text-dim); font-family: 'Consolas', monospace; }
+
+/* ── Canvas ── */
+#stage {
+  position: fixed; top: 42px; left: 0; right: 0; bottom: 0; overflow: hidden;
+  background: var(--bg);
+  background-image: radial-gradient(circle, #13213300 0%, #13213300 50%, #0F1A2700 100%),
+                    radial-gradient(var(--dot-color) 1px, transparent 1px);
+  background-size: 100% 100%, 28px 28px;
+  cursor: grab;
+}
+#stage.panning { cursor: grabbing; }
+#world { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
+#svg-layer { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
+
+/* ── Table cards ── */
+.tbl {
+  position: absolute; width: 196px; border-radius: 7px;
+  border: 1px solid #1A3050; overflow: hidden;
+  cursor: move; user-select: none;
+  box-shadow: 0 4px 18px rgba(0,0,0,.55);
+  transition: box-shadow .18s, border-color .18s, opacity .18s;
+}
+.tbl:hover, .tbl.hi {
+  z-index: 20;
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,.12), 0 8px 28px rgba(0,0,0,.7);
+}
+.tbl.dim { opacity: .15; pointer-events: none; }
+
+.tbl-hdr {
+  display: flex; align-items: center; padding: 7px 9px; gap: 6px;
+  cursor: move;
+}
+.tbl-hdr .ico { font-size: 11px; line-height: 1; flex-shrink: 0; }
+.tbl-hdr .lbl { font-size: 11.5px; font-weight: 600; color: #fff; flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tbl-hdr .cnt { font-size: 9px; color: rgba(255,255,255,.4); flex-shrink: 0; }
+
+.tbl-body { background: var(--card-body); }
+.crow {
+  display: flex; align-items: center;
+  height: 21px; padding: 0 9px 0 8px;
+  border-top: 1px solid rgba(255,255,255,.035);
+  gap: 5px;
+  position: relative;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.badge {
+  font-size: 8px; font-weight: 700; letter-spacing: .3px;
+  width: 20px; text-align: center; flex-shrink: 0;
+  padding: 1px 0; border-radius: 2px;
+}
+.b-pk { background: rgba(232,184,48,.13); color: var(--pk); }
+.b-fk { background: rgba(93,173,226,.13); color: var(--fk-act); }
+.b-fi { background: rgba(62,92,118,.1);  color: var(--fk-inact); }
+.b-__ { background: transparent; color: transparent; }
+.col-n {
+  flex: 1; font-size: 10.5px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.crow.cpk .col-n { color: var(--pk); }
+.crow.cfk .col-n { color: var(--fk-act); }
+.crow.cfi .col-n { color: var(--fk-inact); }
+.col-t { font-size: 9px; color: var(--type-col); flex-shrink: 0; }
+.crow.col-glow {
+  background: rgba(var(--glow,52,152,219), .18);
+  box-shadow: inset 0 0 0 1px rgba(var(--glow,52,152,219), .55), 0 0 9px rgba(var(--glow,52,152,219), .5);
+  z-index: 2;
+}
+.crow.col-glow .col-n { color: #fff; }
+
+/* ── Legend ── */
+#legend {
+  position: fixed; bottom: 14px; left: 14px; z-index: 200;
+  background: var(--tb-bg); border: 1px solid var(--tb-border);
+  border-radius: 7px; padding: 11px 13px; min-width: 168px;
+}
+#legend h4 { font-size: 9px; text-transform: uppercase; letter-spacing: .9px; color: var(--text-dim); margin-bottom: 9px; }
+.lg { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+.lg:last-child { margin-bottom: 0; }
+.lg-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; border: 1px solid; }
+.lg-line { width: 26px; height: 2px; flex-shrink: 0; border-radius: 1px; }
+.lg-dash { width: 26px; height: 0; flex-shrink: 0; border-top: 2px dashed var(--rel-inact); }
+.lg-tx { font-size: 10px; color: var(--text-dim); }
+.lg-sep { height: 1px; background: var(--tb-border); margin: 7px 0; }
+
+/* ── Stats ── */
+#stats {
+  position: fixed; bottom: 14px; right: 14px; z-index: 200;
+  background: var(--tb-bg); border: 1px solid var(--tb-border);
+  border-radius: 7px; padding: 11px 14px;
+}
+.st { font-size: 10px; color: var(--text-dim); margin-bottom: 3px; }
+.st:last-child { margin-bottom: 0; }
+.st b { color: var(--text); }
+
+/* ── Tooltip ── */
+#tip {
+  position: fixed; z-index: 400; display: none;
+  background: #152030; border: 1px solid #2A4060;
+  border-radius: 5px; padding: 6px 10px;
+  font-size: 10px; color: var(--text);
+  pointer-events: none; max-width: 200px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.5);
+}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <div class="tb-title">Fleet Performance Dashboard <small>— Data Model · 13 Tables · 23 Relationships</small></div>
+  <button class="tb-btn" id="zin">＋</button>
+  <div id="zoom-pct">75%</div>
+  <button class="tb-btn" id="zout">－</button>
+  <button class="tb-btn" id="zreset">↺ Reset</button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn lit" id="btninact">Inactive Rels</button>
+  <div class="tb-sep"></div>
+  <button class="tb-btn" id="btnall">Clear Focus</button>
+  <div class="tb-sep"></div>
+  <div class="exp-wrap">
+    <button class="tb-btn" id="btnexport">⬇ Export PNG ▾</button>
+    <div class="exp-menu" id="expmenu">
+      <div class="exp-item" data-scale="1"><span>1× Standard</span><span class="exp-dim" id="expdim1"></span></div>
+      <div class="exp-item" data-scale="2"><span>2× HD</span><span class="exp-dim" id="expdim2"></span></div>
+      <div class="exp-item" data-scale="3"><span>3× Print</span><span class="exp-dim" id="expdim3"></span></div>
+    </div>
+  </div>
+</div>
+
+<div id="stage">
+  <div id="world">
+    <svg id="svg-layer" width="1900" height="1500">
+      <defs>
+        <filter id="lineGlow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="2.6" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+    </svg>
+  </div>
+</div>
+
+<div id="legend">
+  <h4>Legend</h4>
+  <div class="lg"><div class="lg-dot" style="background:#132848;border-color:#2980B9"></div><span class="lg-tx">Fact Table</span></div>
+  <div class="lg"><div class="lg-dot" style="background:#102E1E;border-color:#27AE60"></div><span class="lg-tx">Dimension Table</span></div>
+  <div class="lg"><div class="lg-dot" style="background:#1E1035;border-color:#8E44AD"></div><span class="lg-tx">Fact Extension</span></div>
+  <div class="lg"><div class="lg-dot" style="background:#2E1400;border-color:#D35400"></div><span class="lg-tx">Date Table (DAX)</span></div>
+  <div class="lg-sep"></div>
+  <div class="lg"><div class="lg-line" style="background:var(--rel-act)"></div><span class="lg-tx">Active · Many:One</span></div>
+  <div class="lg"><div class="lg-line" style="background:var(--rel-bidir)"></div><span class="lg-tx">Active · One:One ⇄</span></div>
+  <div class="lg"><span style="display:inline-block;width:26px;text-align:center;color:var(--rel-act);font-size:12px;line-height:1">▶</span><span class="lg-tx">Filter flow · 1 → N</span></div>
+  <div class="lg"><div class="lg-dash"></div><span class="lg-tx">Inactive</span></div>
+  <div class="lg-sep"></div>
+  <div class="lg"><div class="lg-dot" style="background:rgba(232,184,48,.13);border-color:var(--pk)"></div><span class="lg-tx">Primary Key</span></div>
+  <div class="lg"><div class="lg-dot" style="background:rgba(93,173,226,.13);border-color:var(--fk-act)"></div><span class="lg-tx">FK · Active Rel.</span></div>
+  <div class="lg"><div class="lg-dot" style="background:rgba(62,92,118,.1);border-color:var(--fk-inact)"></div><span class="lg-tx">FK · Inactive Rel.</span></div>
+</div>
+
+<div id="stats">
+  <div class="st"><b>13</b> tables</div>
+  <div class="st"><b>149</b> columns</div>
+  <div class="st"><b>12</b> active · <b>11</b> inactive</div>
+  <div class="st" style="margin-top:5px;font-size:9px;color:var(--text-muted)">Drag tables · Scroll to zoom<br>Hover to trace connections</div>
+</div>
+
+<div id="tip"></div>
+
+<script>
+/* ─── Schema ─── */
+const TW = 196, TH_HDR = 36, RH = 21;
+
+const TABLES = [
+  { id:'Date', label:'Date', type:'date', x:845, y:20,
+    desc:'DAX-generated date table (dynamic MIN/MAX from Trips[dispatch_date]). Auto date/time disabled.',
+    cols:[{n:'Date',t:'DT',pk:1},{n:'Year',t:'INT'},{n:'Quarter',t:'STR'},{n:'Month Num',t:'INT'},
+      {n:'Month Name',t:'STR'},{n:'Month Short',t:'STR'},{n:'Day',t:'INT'},
+      {n:'Day of Week',t:'INT'},{n:'Day Name',t:'STR'},{n:'Year-Month',t:'STR'},
+      {n:'Year-Quarter',t:'STR'},{n:'Is Weekend',t:'STR'}]},
+
+  { id:'Trips', label:'Trips', type:'fact', x:680, y:360,
+    desc:'Central fact table — one row per dispatch. Hub of the hub-and-spoke model.',
+    cols:[{n:'trip_id',t:'STR',pk:1},{n:'load_id',t:'STR',fk:'Loads',fa:1},
+      {n:'driver_id',t:'STR',fk:'Drivers',fa:1},{n:'truck_id',t:'STR',fk:'Trucks',fa:1},
+      {n:'trailer_id',t:'STR',fk:'Trailers',fa:1},{n:'dispatch_date',t:'DT',fk:'Date',fa:1},
+      {n:'actual_distance_miles',t:'INT'},{n:'actual_duration_hours',t:'DBL'},
+      {n:'fuel_gallons_used',t:'DBL'},{n:'average_mpg',t:'DBL'},
+      {n:'idle_time_hours',t:'DBL'},{n:'trip_status',t:'STR'}]},
+
+  { id:'Loads', label:'Loads', type:'dim', x:330, y:330,
+    desc:'Shipment records — bridges Customers and Routes to Trips. 4,952 loads have no matching trip (orphaned).',
+    cols:[{n:'load_id',t:'STR',pk:1},{n:'customer_id',t:'STR',fk:'Customers',fa:1},
+      {n:'route_id',t:'STR',fk:'Routes',fa:1},{n:'load_date',t:'DT',fk:'Date',fa:0},
+      {n:'load_type',t:'STR'},{n:'weight_lbs',t:'INT'},{n:'pieces',t:'INT'},
+      {n:'revenue',t:'DEC'},{n:'fuel_surcharge',t:'DEC'},
+      {n:'accessorial_charges',t:'DEC'},{n:'booking_type',t:'STR'}]},
+
+  { id:'Customers', label:'Customers', type:'dim', x:48, y:215,
+    desc:'Client accounts — 200 customers, three contract types: Contract, Spot, Dedicated.',
+    cols:[{n:'customer_id',t:'STR',pk:1},{n:'customer_name',t:'STR'},
+      {n:'customer_type',t:'STR'},{n:'credit_terms_days',t:'INT'},
+      {n:'primary_freight_type',t:'STR'},{n:'account_status',t:'STR'},
+      {n:'contract_start_date',t:'DT'},{n:'annual_revenue_potential',t:'DEC'}]},
+
+  { id:'Drivers', label:'Drivers', type:'dim', x:330, y:26,
+    desc:'Driver workforce — 150 drivers, licensing and employment status.',
+    cols:[{n:'driver_id',t:'STR',pk:1},{n:'first_name',t:'STR'},{n:'last_name',t:'STR'},
+      {n:'hire_date',t:'DT'},{n:'termination_date',t:'DT'},{n:'license_number',t:'STR'},
+      {n:'license_state',t:'STR'},{n:'date_of_birth',t:'DT'},{n:'home_terminal',t:'STR'},
+      {n:'employment_status',t:'STR'},{n:'year_experience',t:'INT'}]},
+
+  { id:'Trucks', label:'Trucks', type:'dim', x:1050, y:226,
+    desc:'Fleet vehicles — 120 trucks, 6 manufacturers, 2015–2021 model years. 28 never dispatched.',
+    cols:[{n:'truck_id',t:'STR',pk:1},{n:'unit_number',t:'INT'},{n:'make',t:'STR'},
+      {n:'model_year',t:'INT'},{n:'vin',t:'STR'},
+      {n:'acquistion_date',t:'DT',fk:'Date',fa:0},
+      {n:'acquistion_mileage',t:'INT'},{n:'tank_capacity_gallons',t:'INT'},
+      {n:'status',t:'STR'},{n:'home_terminal',t:'STR'}]},
+
+  { id:'Trailers', label:'Trailers', type:'dim', x:1318, y:375,
+    desc:'Trailer fleet — type, VIN, and current location per asset.',
+    cols:[{n:'trailer_id',t:'STR',pk:1},{n:'trailer_number',t:'INT'},
+      {n:'trailer_type',t:'STR'},{n:'model_year',t:'INT'},{n:'vin',t:'STR'},
+      {n:'acquisition_date',t:'DT'},{n:'current_location',t:'STR'}]},
+
+  { id:'Routes', label:'Routes', type:'dim', x:48, y:606,
+    desc:'58 standard freight corridors with distance, rate, and transit time.',
+    cols:[{n:'route_id',t:'STR',pk:1},{n:'origin_city',t:'STR'},{n:'origin_state',t:'STR'},
+      {n:'destination_city',t:'STR'},{n:'destination_state',t:'STR'},
+      {n:'typical_distance_miles',t:'INT'},{n:'base_rate_per_mile',t:'DBL'},
+      {n:'fuel_surcharge_rate',t:'DBL'},{n:'typical_transit_days',t:'INT'}]},
+
+  { id:'Facilities', label:'Facilities', type:'dim', x:48, y:888,
+    desc:'Warehouses and distribution centers with geolocation and dock capacity.',
+    cols:[{n:'facility_id',t:'STR',pk:1},{n:'facility_name',t:'STR'},
+      {n:'facility_type',t:'STR'},{n:'city',t:'STR'},{n:'state',t:'STR'},
+      {n:'latitude',t:'DBL'},{n:'longitude',t:'DBL'},{n:'dock_doors',t:'INT'},
+      {n:'start_operation',t:'DT'},{n:'end_operation',t:'DT'},
+      {n:'operating_hours',t:'DBL'}]},
+
+  { id:'Delivery Events', label:'Delivery Events', type:'factExt', x:330, y:672,
+    desc:'Pickup and delivery timestamps per load. on_time_flag derived from scheduled vs actual datetime.',
+    cols:[{n:'event_id',t:'STR',pk:1},{n:'load_id',t:'STR',fk:'Loads',fa:1},
+      {n:'trip_id',t:'STR',fk:'Trips',fa:0},{n:'event_type',t:'STR'},
+      {n:'facility_id',t:'STR',fk:'Facilities',fa:1},
+      {n:'scheduled_date',t:'DT',fk:'Date',fa:0},
+      {n:'scheduled_time',t:'DT'},{n:'actual_date',t:'DT'},{n:'actual_time',t:'DT'},
+      {n:'detention_minutes',t:'INT'},{n:'on_time_flag',t:'BOOL'},
+      {n:'location_city',t:'STR'},{n:'location_state',t:'STR'}]},
+
+  { id:'Fuel Purchases', label:'Fuel Purchases', type:'factExt', x:680, y:714,
+    desc:'Per-trip fuel transactions — $90.1M total across 82K+ purchases in 12 states.',
+    cols:[{n:'fuel_purchase_id',t:'STR',pk:1},{n:'trip_id',t:'STR',fk:'Trips',fa:1},
+      {n:'truck_id',t:'STR',fk:'Trucks',fa:0},{n:'driver_id',t:'STR',fk:'Drivers',fa:0},
+      {n:'purchase_date',t:'DT',fk:'Date',fa:0},
+      {n:'purchase_time',t:'DT'},{n:'location_city',t:'STR'},{n:'location_state',t:'STR'},
+      {n:'gallons',t:'DBL'},{n:'price_per_gallon',t:'DEC'},
+      {n:'total_cost',t:'DEC'},{n:'fuel_card_number',t:'STR'}]},
+
+  { id:'Safety Incidents', label:'Safety Incidents', type:'factExt', x:1030, y:594,
+    desc:'Accidents and violations — at_fault, injury, and preventable flags. claim_amount column.',
+    cols:[{n:'incident_id',t:'STR',pk:1},{n:'trip_id',t:'STR',fk:'Trips',fa:1},
+      {n:'truck_id',t:'STR',fk:'Trucks',fa:0},{n:'driver_id',t:'STR',fk:'Drivers',fa:0},
+      {n:'incident_date',t:'DT',fk:'Date',fa:0},
+      {n:'incident_time',t:'DT'},{n:'incident_type',t:'STR'},
+      {n:'location_city',t:'STR'},{n:'location_state',t:'STR'},
+      {n:'at_fault_flag',t:'BOOL'},{n:'injury_flag',t:'BOOL'},
+      {n:'vehicle_damage_cost',t:'DBL'},{n:'cargo_damage_cost',t:'DBL'},
+      {n:'claim_amount',t:'DEC'},{n:'preventable_flag',t:'BOOL'},
+      {n:'description',t:'STR'}]},
+
+  { id:'Maintenance Records', label:'Maintenance Records', type:'factExt', x:1310, y:580,
+    desc:'Vehicle service history — labor, parts, total cost, and downtime per service event.',
+    cols:[{n:'maintenance_id',t:'STR',pk:1},{n:'truck_id',t:'STR',fk:'Trucks',fa:1},
+      {n:'maintenance_date',t:'DT',fk:'Date',fa:0},
+      {n:'maintenance_type',t:'STR'},{n:'odometer_reading',t:'INT'},
+      {n:'labor_hours',t:'DBL'},{n:'labor_cost',t:'DEC'},{n:'parts_cost',t:'DEC'},
+      {n:'total_cost',t:'DEC'},{n:'facility_location',t:'STR'},
+      {n:'downtime_hours',t:'DBL'},{n:'service_description',t:'STR'}]},
+];
+
+const RELS = [
+  // Active Many:1
+  {f:'Loads',fc:'customer_id',  t:'Customers', tc:'customer_id',  act:1, fc:'N', tc:'1', bd:0},
+  {f:'Delivery Events',fc:'load_id', t:'Loads',tc:'load_id',      act:1, fc:'N', tc:'1', bd:0},
+  {f:'Fuel Purchases',fc:'trip_id', t:'Trips', tc:'trip_id',      act:1, fc:'N', tc:'1', bd:0},
+  {f:'Delivery Events',fc:'facility_id',t:'Facilities',tc:'facility_id',act:1,fc:'N',tc:'1',bd:0},
+  {f:'Trips',fc:'driver_id',    t:'Drivers',   tc:'driver_id',    act:1, fc:'N', tc:'1', bd:0},
+  {f:'Maintenance Records',fc:'truck_id',t:'Trucks',tc:'truck_id',act:1, fc:'N', tc:'1', bd:0},
+  {f:'Trips',fc:'truck_id',     t:'Trucks',    tc:'truck_id',     act:1, fc:'N', tc:'1', bd:0},
+  {f:'Loads',fc:'route_id',     t:'Routes',    tc:'route_id',     act:1, fc:'N', tc:'1', bd:0},
+  {f:'Trips',fc:'trailer_id',   t:'Trailers',  tc:'trailer_id',   act:1, fc:'N', tc:'1', bd:0},
+  {f:'Trips',fc:'trip_id',      t:'Safety Incidents',tc:'trip_id',act:1, fc:'N', tc:'1', bd:0},
+  // Active 1:1 Both Directions
+  {f:'Trips',fc:'load_id',      t:'Loads',     tc:'load_id',      act:1, fc:'1', tc:'1', bd:1},
+  // Active Date
+  {f:'Trips',fc:'dispatch_date',t:'Date',      tc:'Date',         act:1, fc:'N', tc:'1', bd:0},
+  // Inactive
+  {f:'Delivery Events',fc:'trip_id',     t:'Trips',  tc:'trip_id',     act:0,fc:'N',tc:'1',bd:0},
+  {f:'Fuel Purchases', fc:'driver_id',   t:'Drivers',tc:'driver_id',   act:0,fc:'N',tc:'1',bd:0},
+  {f:'Safety Incidents',fc:'driver_id',  t:'Drivers',tc:'driver_id',   act:0,fc:'N',tc:'1',bd:0},
+  {f:'Fuel Purchases', fc:'truck_id',    t:'Trucks', tc:'truck_id',    act:0,fc:'N',tc:'1',bd:0},
+  {f:'Safety Incidents',fc:'truck_id',   t:'Trucks', tc:'truck_id',    act:0,fc:'N',tc:'1',bd:0},
+  {f:'Loads',          fc:'load_date',   t:'Date',   tc:'Date',        act:0,fc:'N',tc:'1',bd:0},
+  {f:'Fuel Purchases', fc:'purchase_date',t:'Date',  tc:'Date',        act:0,fc:'N',tc:'1',bd:0},
+  {f:'Maintenance Records',fc:'maintenance_date',t:'Date',tc:'Date',   act:0,fc:'N',tc:'1',bd:0},
+  {f:'Delivery Events',fc:'scheduled_date',t:'Date',tc:'Date',         act:0,fc:'N',tc:'1',bd:0},
+  {f:'Safety Incidents',fc:'incident_date',t:'Date',tc:'Date',         act:0,fc:'N',tc:'1',bd:0},
+  {f:'Trucks',         fc:'acquistion_date',t:'Date',tc:'Date',        act:0,fc:'N',tc:'1',bd:0},
+];
+
+/* ─── Fix RELS — fc/tc were re-declared ─── */
+const REL_DATA = [
+  {from:'Loads',fromCol:'customer_id',  to:'Customers',toCol:'customer_id',   active:true, fCard:'N',tCard:'1',bidir:false},
+  {from:'Delivery Events',fromCol:'load_id',to:'Loads',toCol:'load_id',       active:true, fCard:'N',tCard:'1',bidir:false},
+  {from:'Fuel Purchases',fromCol:'trip_id',to:'Trips',toCol:'trip_id',        active:true, fCard:'N',tCard:'1',bidir:false},
+  {from:'Delivery Events',fromCol:'facility_id',to:'Facilities',toCol:'facility_id',active:true,fCard:'N',tCard:'1',bidir:false},
+  {from:'Trips',fromCol:'driver_id',    to:'Drivers',toCol:'driver_id',       active:true, fCard:'N',tCard:'1',bidir:false},
+  {from:'Maintenance Records',fromCol:'truck_id',to:'Trucks',toCol:'truck_id',active:true, fCard:'N',tCard:'1',bidir:false},
+  {from:'Trips',fromCol:'truck_id',     to:'Trucks',toCol:'truck_id',         active:true, fCard:'N',tCard:'1',bidir:false},
+  {from:'Loads',fromCol:'route_id',     to:'Routes',toCol:'route_id',         active:true, fCard:'N',tCard:'1',bidir:false},
+  {from:'Trips',fromCol:'trailer_id',   to:'Trailers',toCol:'trailer_id',     active:true, fCard:'N',tCard:'1',bidir:false},
+  {from:'Trips',fromCol:'trip_id',      to:'Safety Incidents',toCol:'trip_id',active:true, fCard:'N',tCard:'1',bidir:false},
+  {from:'Trips',fromCol:'load_id',      to:'Loads',toCol:'load_id',           active:true, fCard:'1',tCard:'1',bidir:true},
+  {from:'Trips',fromCol:'dispatch_date',to:'Date',toCol:'Date',               active:true, fCard:'N',tCard:'1',bidir:false},
+  {from:'Delivery Events',fromCol:'trip_id',to:'Trips',toCol:'trip_id',       active:false,fCard:'N',tCard:'1',bidir:false},
+  {from:'Fuel Purchases',fromCol:'driver_id',to:'Drivers',toCol:'driver_id',  active:false,fCard:'N',tCard:'1',bidir:false},
+  {from:'Safety Incidents',fromCol:'driver_id',to:'Drivers',toCol:'driver_id',active:false,fCard:'N',tCard:'1',bidir:false},
+  {from:'Fuel Purchases',fromCol:'truck_id',to:'Trucks',toCol:'truck_id',     active:false,fCard:'N',tCard:'1',bidir:false},
+  {from:'Safety Incidents',fromCol:'truck_id',to:'Trucks',toCol:'truck_id',   active:false,fCard:'N',tCard:'1',bidir:false},
+  {from:'Loads',fromCol:'load_date',    to:'Date',toCol:'Date',               active:false,fCard:'N',tCard:'1',bidir:false},
+  {from:'Fuel Purchases',fromCol:'purchase_date',to:'Date',toCol:'Date',      active:false,fCard:'N',tCard:'1',bidir:false},
+  {from:'Maintenance Records',fromCol:'maintenance_date',to:'Date',toCol:'Date',active:false,fCard:'N',tCard:'1',bidir:false},
+  {from:'Delivery Events',fromCol:'scheduled_date',to:'Date',toCol:'Date',    active:false,fCard:'N',tCard:'1',bidir:false},
+  {from:'Safety Incidents',fromCol:'incident_date',to:'Date',toCol:'Date',    active:false,fCard:'N',tCard:'1',bidir:false},
+  {from:'Trucks',fromCol:'acquistion_date',to:'Date',toCol:'Date',            active:false,fCard:'N',tCard:'1',bidir:false},
+];
+
+/* ─── State ─── */
+const pos = {};
+TABLES.forEach(t => { pos[t.id] = { x: t.x, y: t.y }; });
+
+let zoom = 0.75, panX = 120, panY = 36;
+let showInactive = true;
+let hovered = null, focused = null;
+let dragCard = null, dragOX = 0, dragOY = 0;
+let isPan = false, panSX = 0, panSY = 0, panSTX = 0, panSTY = 0;
+let mouseDownTarget = null;
+
+/* ─── Helpers ─── */
+const getT  = id => TABLES.find(t => t.id === id);
+const tHgt  = t  => TH_HDR + t.cols.length * RH;
+const colY  = (tid, col) => {
+  const t = getT(tid); if (!t) return 0;
+  const i = t.cols.findIndex(c => c.n === col);
+  return pos[tid].y + TH_HDR + i * RH + RH / 2;
+};
+
+const TYPE_STYLE = {
+  fact:    { hdr:'#132848', bdr:'#2980B9', ico:'⬡' },
+  dim:     { hdr:'#102E1E', bdr:'#27AE60', ico:'▪' },
+  factExt: { hdr:'#1E1035', bdr:'#8E44AD', ico:'◈' },
+  date:    { hdr:'#2E1400', bdr:'#D35400', ico:'◷' },
+};
+
+/* ─── Build DOM cards ─── */
+function buildCards() {
+  const world = document.getElementById('world');
+  TABLES.forEach(t => {
+    const s = TYPE_STYLE[t.type];
+    const el = document.createElement('div');
+    el.className = 'tbl';
+    el.id = 'T_' + t.id;
+    el.dataset.id = t.id;
+    el.style.cssText = `left:${pos[t.id].x}px;top:${pos[t.id].y}px;border-color:${s.bdr}44;`;
+
+    const colsHTML = t.cols.map(c => {
+      let cls = '', badge = '';
+      if (c.pk)      { cls = 'cpk'; badge = `<span class="badge b-pk">PK</span>`; }
+      else if (c.fk) {
+        if (c.fa)    { cls = 'cfk'; badge = `<span class="badge b-fk">FK</span>`; }
+        else         { cls = 'cfi'; badge = `<span class="badge b-fi">FK</span>`; }
+      } else           { badge = `<span class="badge b-__">__</span>`; }
+      return `<div class="crow ${cls}" data-table="${t.id}" data-col="${c.n}" title="${c.n} · ${c.t}${c.fk ? ' → '+c.fk : ''}">${badge}<span class="col-n">${c.n}</span><span class="col-t">${c.t}</span></div>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="tbl-hdr" style="background:${s.hdr}">
+        <span class="ico">${s.ico}</span>
+        <span class="lbl" title="${t.desc}">${t.label}</span>
+        <span class="cnt">${t.cols.length}</span>
+      </div>
+      <div class="tbl-body">${colsHTML}</div>`;
+    world.appendChild(el);
+  });
+}
+
+/* ─── SVG Relationship Lines ─── */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function ports(rel) {
+  const ft = getT(rel.from), tt = getT(rel.to);
+  const fp = pos[rel.from], tp = pos[rel.to];
+  const fCX = fp.x + TW / 2, tCX = tp.x + TW / 2;
+  const fCY = fp.y + tHgt(ft) / 2, tCY = tp.y + tHgt(tt) / 2;
+  const dx = tCX - fCX, dy = tCY - fCY;
+
+  const fcy = colY(rel.from, rel.fromCol);
+  const tcy = colY(rel.to, rel.toCol);
+
+  if (Math.abs(dx) >= Math.abs(dy) * 0.6) {
+    if (dx >= 0) return { fx: fp.x + TW, fy: fcy, fs:'r', tx: tp.x, ty: tcy, ts:'l' };
+    else         return { fx: fp.x,       fy: fcy, fs:'l', tx: tp.x + TW, ty: tcy, ts:'r' };
+  } else {
+    if (dy >= 0) return { fx: fCX, fy: fp.y + tHgt(ft), fs:'b', tx: tCX, ty: tp.y, ts:'t' };
+    else         return { fx: fCX, fy: fp.y,             fs:'t', tx: tCX, ty: tp.y + tHgt(tt), ts:'b' };
+  }
+}
+
+function bezierCtrl(pts) {
+  const { fx, fy, fs, tx, ty, ts } = pts;
+  const d = Math.hypot(tx - fx, ty - fy);
+  const off = Math.max(Math.min(d * 0.38, 115), 38);
+  const SO = { r:1, l:-1, b:0, t:0 };
+  const SV = { r:0, l:0,  b:1, t:-1 };
+  return {
+    p0: { x: fx, y: fy },
+    p1: { x: fx + SO[fs]*off, y: fy + SV[fs]*off },
+    p2: { x: tx + SO[ts]*off, y: ty + SV[ts]*off },
+    p3: { x: tx, y: ty },
+  };
+}
+function pathD(b) {
+  return `M${b.p0.x} ${b.p0.y} C${b.p1.x} ${b.p1.y} ${b.p2.x} ${b.p2.y} ${b.p3.x} ${b.p3.y}`;
+}
+function bezPoint(b, t) {
+  const m = 1 - t;
+  return {
+    x: m*m*m*b.p0.x + 3*m*m*t*b.p1.x + 3*m*t*t*b.p2.x + t*t*t*b.p3.x,
+    y: m*m*m*b.p0.y + 3*m*m*t*b.p1.y + 3*m*t*t*b.p2.y + t*t*t*b.p3.y,
+  };
+}
+function bezTangent(b, t) {
+  const m = 1 - t;
+  const x = 3*m*m*(b.p1.x-b.p0.x) + 6*m*t*(b.p2.x-b.p1.x) + 3*t*t*(b.p3.x-b.p2.x);
+  const y = 3*m*m*(b.p1.y-b.p0.y) + 6*m*t*(b.p2.y-b.p1.y) + 3*t*t*(b.p3.y-b.p2.y);
+  const len = Math.hypot(x, y) || 1;
+  return { x: x/len, y: y/len };
+}
+/* Filled triangle pointing in direction `tan`, centered at `pt` — used to show filter-flow direction */
+function arrowPoly(pt, tan, color, op) {
+  const L = 9, W = 6.2;
+  const nx = -tan.y, ny = tan.x;
+  const tipX  = pt.x + tan.x*L*0.55, tipY  = pt.y + tan.y*L*0.55;
+  const backX = pt.x - tan.x*L*0.55, backY = pt.y - tan.y*L*0.55;
+  const b1x = backX + nx*W*0.5, b1y = backY + ny*W*0.5;
+  const b2x = backX - nx*W*0.5, b2y = backY - ny*W*0.5;
+  return `<polygon points="${tipX.toFixed(1)},${tipY.toFixed(1)} ${b1x.toFixed(1)},${b1y.toFixed(1)} ${b2x.toFixed(1)},${b2y.toFixed(1)}" fill="${color}" opacity="${op}"/>`;
+}
+
+/* Card markers — tick for 1, crow-foot for N */
+function markerSVG(x, y, side, card, color) {
+  const SO = { r:1, l:-1, b:0, t:0 };
+  const SV = { r:0, l:0,  b:1, t:-1 };
+  const perp = { r:[0,5.5], l:[0,5.5], b:[5.5,0], t:[5.5,0] };
+  const [px, py] = perp[side];
+  const mx = x - SO[side] * 10;
+  const my = y - SV[side] * 10;
+
+  if (card === '1') {
+    return `<line x1="${mx-px}" y1="${my-py}" x2="${mx+px}" y2="${my+py}" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+            <line x1="${mx-SO[side]*5-px}" y1="${my-SV[side]*5-py}" x2="${mx-SO[side]*5+px}" y2="${my-SV[side]*5+py}" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
+  } else {
+    return `<line x1="${mx-px}" y1="${my-py}" x2="${x}" y2="${y}" stroke="${color}" stroke-width="1.8" stroke-linecap="round"/>
+            <line x1="${mx+px}" y1="${my+py}" x2="${x}" y2="${y}" stroke="${color}" stroke-width="1.8" stroke-linecap="round"/>
+            <line x1="${mx}"    y1="${my}"    x2="${x}" y2="${y}" stroke="${color}" stroke-width="1.8" stroke-linecap="round"/>
+            <line x1="${mx-px}" y1="${my-py}" x2="${mx+px}" y2="${my+py}" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
+  }
+}
+
+let relEls = [];
+
+function buildRelSVG() {
+  const svg = document.getElementById('svg-layer');
+  // Clear
+  relEls.forEach(g => g.remove());
+  relEls = [];
+
+  REL_DATA.forEach((rel, i) => {
+    if (!showInactive && !rel.active) return;
+
+    const color  = rel.bidir ? '#2ECC71' : rel.active ? '#3498DB' : '#2A4060';
+    const sw     = rel.active ? (rel.bidir ? 2 : 1.8) : 1.4;
+    const dash   = rel.active ? '' : '5,4';
+    const opacity = rel.active ? 1 : 0.7;
+
+    const g = document.createElementNS(SVG_NS, 'g');
+    g.dataset.from = rel.from;
+    g.dataset.to   = rel.to;
+    g.dataset.act  = rel.active ? '1' : '0';
+
+    const pathEl = document.createElementNS(SVG_NS, 'path');
+    pathEl.setAttribute('fill', 'none');
+    pathEl.setAttribute('stroke', color);
+    pathEl.setAttribute('stroke-width', sw);
+    pathEl.setAttribute('opacity', opacity);
+    if (dash) pathEl.setAttribute('stroke-dasharray', dash);
+    pathEl.setAttribute('stroke-linecap', 'round');
+
+    // Invisible hit-area
+    const hit = document.createElementNS(SVG_NS, 'path');
+    hit.setAttribute('fill', 'none');
+    hit.setAttribute('stroke', 'transparent');
+    hit.setAttribute('stroke-width', 10);
+    hit.style.pointerEvents = 'stroke';
+    hit.style.cursor = 'pointer';
+    hit.setAttribute('title', `${rel.from}.${rel.fromCol} → ${rel.to}.${rel.toCol}`);
+
+    // Hover: glow the line itself + the two columns that form this relationship
+    const glowRGB = rel.bidir ? '46,204,113' : rel.active ? '52,152,219' : '160,180,205';
+    hit.addEventListener('mouseenter', () => {
+      pathEl.setAttribute('stroke-width', sw + 1.6);
+      pathEl.setAttribute('opacity', 1);
+      pathEl.style.filter = 'url(#lineGlow)';
+      const a = document.querySelector(`.crow[data-table="${rel.from}"][data-col="${rel.fromCol}"]`);
+      const b = document.querySelector(`.crow[data-table="${rel.to}"][data-col="${rel.toCol}"]`);
+      [a, b].forEach(el => { if (el) { el.style.setProperty('--glow', glowRGB); el.classList.add('col-glow'); } });
+    });
+    hit.addEventListener('mouseleave', () => {
+      pathEl.setAttribute('stroke-width', sw);
+      pathEl.setAttribute('opacity', opacity);
+      pathEl.style.filter = '';
+      const a = document.querySelector(`.crow[data-table="${rel.from}"][data-col="${rel.fromCol}"]`);
+      const b = document.querySelector(`.crow[data-table="${rel.to}"][data-col="${rel.toCol}"]`);
+      [a, b].forEach(el => { if (el) { el.classList.remove('col-glow'); el.style.removeProperty('--glow'); } });
+    });
+
+    const markers = document.createElementNS(SVG_NS, 'g');
+    markers.setAttribute('fill', 'none');
+
+    g.appendChild(pathEl);
+    g.appendChild(hit);
+    g.appendChild(markers);
+    svg.appendChild(g);
+
+    relEls.push(g);
+    updateRelEl(g, rel);
+  });
+}
+
+function updateRelEl(g, rel) {
+  if (!showInactive && !rel.active) { g.style.display = 'none'; return; }
+  g.style.display = '';
+
+  const pts = ports(rel);
+  const bp  = bezierCtrl(pts);
+  const d   = pathD(bp);
+  const color      = rel.bidir ? '#2ECC71' : rel.active ? '#3498DB' : '#2A4060';
+  const arrowColor = rel.bidir ? '#2ECC71' : rel.active ? '#3498DB' : '#6E8CAB';
+  const arrowOp    = rel.active ? 0.95 : 0.55;
+
+  const pathEl  = g.children[0];
+  const hit     = g.children[1];
+  const markers = g.children[2];
+
+  pathEl.setAttribute('d', d);
+  hit.setAttribute('d', d);
+
+  // Cardinality markers — tick for "1" side, crow's foot for "N" side
+  let m = markerSVG(pts.fx, pts.fy, pts.fs, rel.fCard, color) +
+          markerSVG(pts.tx, pts.ty, pts.ts, rel.tCard, color);
+
+  // Filter-direction arrow(s) — context flows from the "1" side toward the "N" side.
+  // p0 = "from" port, p3 = "to" port. If "from" itself is the "1" side, the flow follows
+  // the curve's natural tangent (p0 -> p3); otherwise it runs the reverse direction.
+  if (rel.bidir) {
+    const tA = bezTangent(bp, 0.40), ptA = bezPoint(bp, 0.40);
+    const tB = bezTangent(bp, 0.60), ptB = bezPoint(bp, 0.60);
+    m += arrowPoly(ptA, { x:-tA.x, y:-tA.y }, arrowColor, arrowOp);
+    m += arrowPoly(ptB, tB, arrowColor, arrowOp);
+  } else {
+    const t   = 0.5;
+    const tan = bezTangent(bp, t);
+    const pt  = bezPoint(bp, t);
+    const dir = (rel.fCard === '1') ? tan : { x:-tan.x, y:-tan.y };
+    m += arrowPoly(pt, dir, arrowColor, arrowOp);
+  }
+
+  markers.innerHTML = m;
+}
+
+function redrawRels() {
+  let ri = 0;
+  REL_DATA.forEach((rel) => {
+    if (!showInactive && !rel.active) return;
+    const g = relEls[ri++];
+    if (g) updateRelEl(g, rel);
+  });
+}
+
+/* ─── Focus / Hover Highlighting ─── */
+function connectedTo(tableId) {
+  const set = new Set([tableId]);
+  REL_DATA.forEach(r => {
+    if (!showInactive && !r.active) return;
+    if (r.from === tableId) set.add(r.to);
+    if (r.to   === tableId) set.add(r.from);
+  });
+  return set;
+}
+
+function applyFocus(focusId) {
+  const conn = focusId ? connectedTo(focusId) : null;
+  TABLES.forEach(t => {
+    const el = document.getElementById('T_' + t.id);
+    if (!el) return;
+    if (!focusId) { el.classList.remove('hi','dim'); return; }
+    if (conn.has(t.id)) { el.classList.add('hi'); el.classList.remove('dim'); }
+    else                { el.classList.add('dim'); el.classList.remove('hi'); }
+  });
+
+  // Dim/show relationship lines
+  let ri = 0;
+  REL_DATA.forEach(r => {
+    if (!showInactive && !r.active) return;
+    const g = relEls[ri++];
+    if (!g) return;
+    if (!focusId) { g.style.opacity = ''; return; }
+    const involved = (r.from === focusId || r.to === focusId);
+    g.style.opacity = involved ? '1' : '0.04';
+  });
+}
+
+/* ─── Transform ─── */
+function applyTransform() {
+  const w = document.getElementById('world');
+  w.style.transform = `translate(${panX}px,${panY}px) scale(${zoom})`;
+  document.getElementById('zoom-pct').textContent = Math.round(zoom * 100) + '%';
+}
+
+/* ─── Card drag ─── */
+function cardPos(e) {
+  return {
+    x: (e.clientX - panX) / zoom,
+    y: (e.clientY - 42 - panY) / zoom,
+  };
+}
+
+/* ─── Events ─── */
+document.getElementById('stage').addEventListener('mousedown', e => {
+  const card = e.target.closest('.tbl');
+  if (card) {
+    // Card drag
+    dragCard = card;
+    const tid = card.dataset.id;
+    const cp = cardPos(e);
+    dragOX = cp.x - pos[tid].x;
+    dragOY = cp.y - pos[tid].y;
+    card.style.zIndex = 30;
+    e.stopPropagation();
+  } else {
+    // Pan
+    isPan = true;
+    panSX = e.clientX; panSY = e.clientY;
+    panSTX = panX; panSTY = panY;
+    document.getElementById('stage').classList.add('panning');
+  }
+});
+
+document.addEventListener('mousemove', e => {
+  if (dragCard) {
+    const tid = dragCard.dataset.id;
+    const cp = cardPos(e);
+    pos[tid].x = cp.x - dragOX;
+    pos[tid].y = cp.y - dragOY;
+    dragCard.style.left = pos[tid].x + 'px';
+    dragCard.style.top  = pos[tid].y + 'px';
+    redrawRels();
+    return;
+  }
+  if (isPan) {
+    panX = panSTX + (e.clientX - panSX);
+    panY = panSTY + (e.clientY - panSY);
+    applyTransform();
+  }
+});
+
+document.addEventListener('mouseup', e => {
+  if (dragCard) { dragCard.style.zIndex = ''; dragCard = null; }
+  if (isPan) { isPan = false; document.getElementById('stage').classList.remove('panning'); }
+});
+
+/* Hover */
+document.getElementById('world').addEventListener('mouseover', e => {
+  const card = e.target.closest('.tbl');
+  const tid  = card ? card.dataset.id : null;
+  if (tid !== hovered) {
+    hovered = tid;
+    if (!focused) applyFocus(hovered);
+  }
+});
+document.getElementById('world').addEventListener('mouseout', e => {
+  if (!e.relatedTarget || !e.relatedTarget.closest('.tbl')) {
+    hovered = null;
+    if (!focused) applyFocus(null);
+  }
+});
+
+/* Tooltip */
+document.getElementById('world').addEventListener('mousemove', e => {
+  const card = e.target.closest('.tbl');
+  const tip  = document.getElementById('tip');
+  if (card) {
+    const tid = card.dataset.id;
+    const t   = getT(tid);
+    tip.style.display = 'block';
+    tip.style.left = (e.clientX + 12) + 'px';
+    tip.style.top  = (e.clientY + 8) + 'px';
+    tip.textContent = t.desc;
+  } else {
+    tip.style.display = 'none';
+  }
+});
+
+/* Scroll zoom */
+document.getElementById('stage').addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.1 : 0.91;
+  const rect = document.getElementById('stage').getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  panX = mx - (mx - panX) * factor;
+  panY = my - (my - panY) * factor;
+  zoom = Math.max(0.2, Math.min(2.5, zoom * factor));
+  applyTransform();
+}, { passive: false });
+
+/* Toolbar buttons */
+document.getElementById('zin').addEventListener('click', () => {
+  zoom = Math.min(2.5, zoom * 1.2); applyTransform();
+});
+document.getElementById('zout').addEventListener('click', () => {
+  zoom = Math.max(0.2, zoom / 1.2); applyTransform();
+});
+document.getElementById('zreset').addEventListener('click', () => {
+  zoom = 0.75; panX = 120; panY = 36;
+  TABLES.forEach(t => { pos[t.id].x = t.x; pos[t.id].y = t.y; });
+  TABLES.forEach(t => {
+    const el = document.getElementById('T_' + t.id);
+    if (el) { el.style.left = t.x + 'px'; el.style.top = t.y + 'px'; }
+  });
+  applyTransform();
+  redrawRels();
+});
+
+const btnI = document.getElementById('btninact');
+btnI.addEventListener('click', () => {
+  showInactive = !showInactive;
+  btnI.classList.toggle('lit', showInactive);
+  btnI.textContent = (showInactive ? '' : '◌ ') + 'Inactive Rels';
+  buildRelSVG();
+  redrawRels();
+});
+
+document.getElementById('btnall').addEventListener('click', () => {
+  focused = null; applyFocus(null);
+});
+
+/* Double-click to pin focus */
+document.getElementById('world').addEventListener('dblclick', e => {
+  const card = e.target.closest('.tbl');
+  if (card) {
+    const tid = card.dataset.id;
+    focused = focused === tid ? null : tid;
+    applyFocus(focused);
+  }
+});
+
+/* ─── PNG Export ───
+   Re-renders the ENTIRE diagram (all tables at their current positions, all
+   visible relationships) as a standalone SVG using the same color tokens and
+   layout math as the live view, then rasterizes it to PNG at 1×/2×/3×.
+   This guarantees every table and relationship is captured regardless of the
+   current pan/zoom/focus state. */
+
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function truncateName(s, max) { return s.length > max ? s.slice(0, max - 1) + '…' : s; }
+
+function getBBox() {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  TABLES.forEach(t => {
+    const p = pos[t.id], h = tHgt(t);
+    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x + TW); maxY = Math.max(maxY, p.y + h);
+  });
+  const pad = 130; // covers max bezier control-point offset (115px) + marker/arrow size
+  return { minX: minX - pad, minY: minY - pad, w: (maxX - minX) + pad * 2, h: (maxY - minY) + pad * 2 };
+}
+
+function tableSVGGroup(t, ox, oy) {
+  const s = TYPE_STYLE[t.type];
+  const p = pos[t.id];
+  const x = p.x - ox, y = p.y - oy;
+  const h = tHgt(t);
+  const cid = 'clip_' + t.id.replace(/[^a-zA-Z0-9]/g, '_');
+  let svg = `<clipPath id="${cid}"><rect x="${x}" y="${y}" width="${TW}" height="${h}" rx="7"/></clipPath>`;
+  svg += `<g clip-path="url(#${cid})">`;
+  svg += `<rect x="${x}" y="${y}" width="${TW}" height="${h}" fill="#0D1826"/>`;
+  svg += `<rect x="${x}" y="${y}" width="${TW}" height="${TH_HDR}" fill="${s.hdr}"/>`;
+  for (let i = 0; i < t.cols.length; i++) {
+    const ry = y + TH_HDR + i * RH;
+    svg += `<line x1="${x}" y1="${ry}" x2="${x + TW}" y2="${ry}" stroke="rgba(255,255,255,.06)" stroke-width="1"/>`;
+  }
+  svg += `</g>`;
+  svg += `<rect x="${x + 0.5}" y="${y + 0.5}" width="${TW - 1}" height="${h - 1}" rx="7" fill="none" stroke="${s.bdr}66" stroke-width="1"/>`;
+
+  // Header
+  svg += `<text x="${x + 10}" y="${y + 22}" font-family="Segoe UI, sans-serif" font-size="12" fill="#ffffff">${s.ico}</text>`;
+  svg += `<text x="${x + 25}" y="${y + 22}" font-family="Segoe UI, sans-serif" font-size="12" font-weight="700" fill="#ffffff">${esc(t.label)}</text>`;
+  svg += `<text x="${x + TW - 9}" y="${y + 22}" font-family="Segoe UI, sans-serif" font-size="9" fill="rgba(255,255,255,.45)" text-anchor="end">${t.cols.length}</text>`;
+
+  // Rows
+  t.cols.forEach((c, i) => {
+    const ry = y + TH_HDR + i * RH;
+    const cy = ry + 14;
+    let badgeBg = '', badgeFg = '', badgeTx = '';
+    if (c.pk) { badgeBg = 'rgba(232,184,48,.16)'; badgeFg = '#E8B830'; badgeTx = 'PK'; }
+    else if (c.fk) {
+      if (c.fa) { badgeBg = 'rgba(93,173,226,.16)'; badgeFg = '#5DADE2'; badgeTx = 'FK'; }
+      else { badgeBg = 'rgba(62,92,118,.16)'; badgeFg = '#7E9BB8'; badgeTx = 'FK'; }
+    }
+    if (badgeTx) {
+      svg += `<rect x="${x + 8}" y="${ry + 4.5}" width="20" height="12" rx="2.5" fill="${badgeBg}"/>`;
+      svg += `<text x="${x + 18}" y="${cy - 0.5}" font-family="Segoe UI, sans-serif" font-size="8" font-weight="700" fill="${badgeFg}" text-anchor="middle">${badgeTx}</text>`;
+    }
+    let nameColor = '#C2D4E2';
+    if (c.pk) nameColor = '#E8B830';
+    else if (c.fk) nameColor = c.fa ? '#5DADE2' : '#7E9BB8';
+    svg += `<text x="${x + 33}" y="${cy}" font-family="Segoe UI, sans-serif" font-size="11" fill="${nameColor}">${esc(truncateName(c.n, 21))}</text>`;
+    svg += `<text x="${x + TW - 9}" y="${cy}" font-family="Segoe UI, sans-serif" font-size="9" fill="#5478A0" text-anchor="end">${c.t}</text>`;
+  });
+  return svg;
+}
+
+function relSVGGroup(rel, ox, oy) {
+  const pts = ports(rel);
+  const bp  = bezierCtrl(pts);
+  const tbp = {
+    p0: { x: bp.p0.x - ox, y: bp.p0.y - oy },
+    p1: { x: bp.p1.x - ox, y: bp.p1.y - oy },
+    p2: { x: bp.p2.x - ox, y: bp.p2.y - oy },
+    p3: { x: bp.p3.x - ox, y: bp.p3.y - oy },
+  };
+  const d = pathD(tbp);
+  const color      = rel.bidir ? '#2ECC71' : rel.active ? '#3498DB' : '#3D5A7A';
+  const arrowColor = rel.bidir ? '#2ECC71' : rel.active ? '#3498DB' : '#7E9BB8';
+  const sw       = rel.active ? (rel.bidir ? 2.2 : 2) : 1.6;
+  const dashAttr = rel.active ? '' : 'stroke-dasharray="6,5"';
+  const opacity  = rel.active ? 1 : 0.85;
+  const arrowOp  = rel.active ? 0.95 : 0.7;
+
+  let svg = `<path d="${d}" fill="none" stroke="${color}" stroke-width="${sw}" opacity="${opacity}" ${dashAttr} stroke-linecap="round"/>`;
+
+  const tx_ = { fx: pts.fx - ox, fy: pts.fy - oy, fs: pts.fs, tx: pts.tx - ox, ty: pts.ty - oy, ts: pts.ts };
+  svg += markerSVG(tx_.fx, tx_.fy, tx_.fs, rel.fCard, color);
+  svg += markerSVG(tx_.tx, tx_.ty, tx_.ts, rel.tCard, color);
+
+  if (rel.bidir) {
+    const tA = bezTangent(tbp, 0.40), ptA = bezPoint(tbp, 0.40);
+    const tB = bezTangent(tbp, 0.60), ptB = bezPoint(tbp, 0.60);
+    svg += arrowPoly(ptA, { x: -tA.x, y: -tA.y }, arrowColor, arrowOp);
+    svg += arrowPoly(ptB, tB, arrowColor, arrowOp);
+  } else {
+    const tan = bezTangent(tbp, 0.5), pt = bezPoint(tbp, 0.5);
+    const dir = (rel.fCard === '1') ? tan : { x: -tan.x, y: -tan.y };
+    svg += arrowPoly(pt, dir, arrowColor, arrowOp);
+  }
+  return svg;
+}
+
+function buildExportSVG(scale) {
+  const bb = getBBox();
+  const W = Math.round(bb.w * scale), H = Math.round(bb.h * scale);
+  let body = '';
+  body += `<defs><pattern id="expdots" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="14" cy="14" r="1" fill="#15233380"/></pattern></defs>`;
+  body += `<rect x="0" y="0" width="${bb.w}" height="${bb.h}" fill="#090E15"/>`;
+  body += `<rect x="0" y="0" width="${bb.w}" height="${bb.h}" fill="url(#expdots)"/>`;
+  REL_DATA.forEach(rel => {
+    if (!showInactive && !rel.active) return;
+    body += relSVGGroup(rel, bb.minX, bb.minY);
+  });
+  TABLES.forEach(t => { body += tableSVGGroup(t, bb.minX, bb.minY); });
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${bb.w} ${bb.h}">${body}</svg>`;
+  return { svg, W, H };
+}
+
+function svgToDataURL(svgStr) {
+  const encoded = encodeURIComponent(svgStr).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode('0x' + p1));
+  return 'data:image/svg+xml;base64,' + btoa(encoded);
+}
+
+function exportPNG(scale) {
+  const { svg, W, H } = buildExportSVG(scale);
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, W, H);
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fleet-dashboard-er-diagram_${scale}x_${W}x${H}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      resetExportBtn();
+    }, 'image/png');
+  };
+  img.onerror = () => { resetExportBtn(); alert('Export failed — please try again.'); };
+  img.src = svgToDataURL(svg);
+}
+
+function resetExportBtn() {
+  btnExport.textContent = '⬇ Export PNG ▾';
+  btnExport.classList.remove('lit');
+  btnExport.style.pointerEvents = '';
+}
+
+const btnExport = document.getElementById('btnexport');
+const expMenu   = document.getElementById('expmenu');
+
+btnExport.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const bb = getBBox();
+  [1, 2, 3].forEach(s => {
+    const d = document.getElementById('expdim' + s);
+    if (d) d.textContent = Math.round(bb.w * s) + ' × ' + Math.round(bb.h * s);
+  });
+  expMenu.classList.toggle('open');
+});
+document.addEventListener('click', () => expMenu.classList.remove('open'));
+
+expMenu.querySelectorAll('.exp-item').forEach(item => {
+  item.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const scale = parseInt(item.dataset.scale, 10);
+    expMenu.classList.remove('open');
+    btnExport.textContent = '⬇ Generating…';
+    btnExport.classList.add('lit');
+    btnExport.style.pointerEvents = 'none';
+    setTimeout(() => exportPNG(scale), 30);
+  });
+});
+
+/* ─── Init ─── */
+buildCards();
+buildRelSVG();
+applyTransform();
+</script>
+</body>
+</html>
